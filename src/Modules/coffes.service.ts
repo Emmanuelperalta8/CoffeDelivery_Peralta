@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { CoffeesDto } from './Types/Coffees';
 
 export interface Coffee {
   id: number;
@@ -11,8 +12,8 @@ export interface Coffee {
 }
 
 @Injectable()
-export class AppService {
-  private cafes: Coffee[] = [
+export class CoffesService {
+  private cafes: CoffeesDto[] = [
     {
       id: 1,
       nome: "Espresso",
@@ -139,4 +140,11 @@ export class AppService {
 
     this.cafes.splice(index, 1);
   }
+
+  createCofee(newCofee:CoffeesDto):CoffeesDto{
+    this.cafes.push(newCofee);
+    return newCofee
+    
+  }
+
 }
