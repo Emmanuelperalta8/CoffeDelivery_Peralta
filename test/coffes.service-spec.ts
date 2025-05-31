@@ -23,7 +23,7 @@ export class CoffesService {
       peso: "250g",
       tag: ["intenso", "rápido", "tradicional"],
       quantidade: 50,
-      date_create: new Date("2025-04-02T10:15:00.000Z").toISOString()
+      date_create: "2025-04-02T10:15:00.000Z" //new Date().toISOString() 
     },
     {
       id: 2,
@@ -33,7 +33,7 @@ export class CoffesService {
       peso: "500g",
       tag: ["cremoso", "suave", "italiano"],
       quantidade: 30,
-      date_create: new Date("2025-04-05T14:25:00.000Z").toISOString()
+      date_create: "2025-04-05T14:25:00.000Z"
     },
     {
       id: 3,
@@ -43,7 +43,7 @@ export class CoffesService {
       peso: "300g",
       tag: ["leve", "suave", "refrescante"],
       quantidade: 40,
-      date_create: new Date("2025-04-10T09:45:00.000Z").toISOString()
+      date_create: "2025-04-10T09:45:00.000Z"
     },
     {
       id: 4,
@@ -53,7 +53,7 @@ export class CoffesService {
       peso: "450g",
       tag: ["doce", "chocolate", "suave"],
       quantidade: 25,
-      date_create: new Date("2025-04-18T16:30:00.000Z").toISOString()
+      date_create: "2025-04-18T16:30:00.000Z"
     },
     {
       id: 5,
@@ -63,7 +63,7 @@ export class CoffesService {
       peso: "200g",
       tag: ["intenso", "cremoso", "suave"],
       quantidade: 35,
-      date_create: new Date("2025-04-22T11:50:00.000Z").toISOString()
+      date_create: "2025-04-22T11:50:00.000Z"
     },
     {
       id: 6,
@@ -73,7 +73,7 @@ export class CoffesService {
       peso: "500g",
       tag: ["suave", "cremoso", "longo"],
       quantidade: 28,
-      date_create: new Date("2025-04-28T08:20:00.000Z").toISOString()
+      date_create: "2025-04-28T08:20:00.000Z"
     },
     {
       id: 7,
@@ -83,7 +83,7 @@ export class CoffesService {
       peso: "350g",
       tag: ["frio", "suave", "verão"],
       quantidade: 22,
-      date_create: new Date("2025-05-03T13:10:00.000Z").toISOString()
+      date_create: "2025-05-03T13:10:00.000Z"
     },
     {
       id: 8,
@@ -93,7 +93,7 @@ export class CoffesService {
       peso: "400g",
       tag: ["forte", "tradicional", "exótico"],
       quantidade: 18,
-      date_create: new Date("2025-05-10T17:40:00.000Z").toISOString()
+      date_create: "2025-05-10T17:40:00.000Z"
     },
     {
       id: 9,
@@ -103,7 +103,7 @@ export class CoffesService {
       peso: "250g",
       tag: ["leve", "sem cafeína", "suave"],
       quantidade: 27,
-      date_create: new Date("2025-05-18T12:05:00.000Z").toISOString()
+      date_create: "2025-05-18T12:05:00.000Z"
     },
     {
       id: 10,
@@ -113,27 +113,32 @@ export class CoffesService {
       peso: "350g",
       tag: ["cremoso", "suave", "australiano"],
       quantidade: 20,
-      date_create: new Date("2025-05-27T09:55:00.000Z").toISOString()
+      date_create: "2025-05-27T09:55:00.000Z"
     }
+    
   ];
 
-  getCoffees(): CoffeesDto[] {
+  getHello(): string {
+    return 'Hello World';
+  }
+
+  getCoffees(): Coffee[] {
     return this.cafes;
   }
 
-  getCoffeeById(id: number): CoffeesDto {
-    const cafe = this.cafes.find(c => c.id === id);
+  getCoffeeById(id: number): Coffee {
+    const cafe = this.cafes.find((c) => c.id === id);
     if (!cafe) throw new NotFoundException(`Café com ID #${id} não encontrado`);
     return cafe;
   }
 
-  addCoffee(coffee: CoffeesDto): CoffeesDto {
+  addCoffee(coffee: Coffee): Coffee {
     this.cafes.push(coffee);
     return coffee;
   }
 
-  updateCoffee(id: number, updatedData: Partial<CoffeesDto>): CoffeesDto {
-    const index = this.cafes.findIndex(c => c.id === id);
+  updateCoffee(id: number, updatedData: Partial<Coffee>): Coffee {
+    const index = this.cafes.findIndex((c) => c.id === id);
     if (index === -1) throw new NotFoundException(`Café com ID #${id} não encontrado`);
 
     this.cafes[index] = { ...this.cafes[index], ...updatedData };
@@ -141,28 +146,16 @@ export class CoffesService {
   }
 
   deleteCoffee(id: number): void {
-    const index = this.cafes.findIndex(c => c.id === id);
+    const index = this.cafes.findIndex((c) => c.id === id);
     if (index === -1) throw new NotFoundException(`Café com ID #${id} não encontrado`);
 
     this.cafes.splice(index, 1);
   }
 
-  createCoffee(newCoffee: CoffeesDto): CoffeesDto {
-    this.cafes.push(newCoffee);
-    return newCoffee;
+  createCofee(newCofee:CoffeesDto):CoffeesDto{
+    this.cafes.push(newCofee);
+    return newCofee
+    
   }
 
-  filterCoffeesByPeriod(startDate: string, endDate: string): CoffeesDto[] {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      throw new Error('Datas inválidas fornecidas.');
-    }
-
-    return this.cafes.filter(coffee => {
-      const coffeeDate = new Date(coffee.date_create);
-      return coffeeDate >= start && coffeeDate <= end;
-    });
-  }
 }

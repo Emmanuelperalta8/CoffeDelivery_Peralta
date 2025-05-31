@@ -1,6 +1,7 @@
-import { Controller, Get, Param, Post, Body, Put, Delete } from '@nestjs/common';
+import { Controller, Get, Param, Post, Body, Put, Delete, Query } from '@nestjs/common';
 import { CoffesService, Coffee } from './coffes.service';
 import { CoffeesDto } from './Types/Coffees';
+import { get } from 'http';
 
 @Controller('coffees') 
 export class CoffesController {
@@ -33,7 +34,19 @@ export class CoffesController {
 
   @Post ('coffes/creat')
   createCofee(@Body()newCofee:CoffeesDto):CoffeesDto{
-    return this.CoffesService.createCofee(newCofee);
+    return this.CoffesService.createCoffee(newCofee);
+  }
+  
+  @Get ('/coffee-query-all/:id')
+  coffeeQueryAll(@Query() coffee: CoffeesDto, @Param() id: string){
+    console.log(coffee, id);
+  }
+  @Get('filter')
+  filterByDate(
+    @Query('start') startDate: string,
+    @Query('end') endDate: string
+  ): CoffeesDto[] {
+    return this.CoffesService.filterCoffeesByPeriod(startDate, endDate);
   }
 
   
