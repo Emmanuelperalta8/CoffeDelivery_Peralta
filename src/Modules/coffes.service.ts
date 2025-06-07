@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CoffeesDto } from './Types/Coffees';
+import { Prisma } from 'generated/prisma';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 export interface Coffee {
   id: number;
@@ -13,7 +15,8 @@ export interface Coffee {
 }
 
 @Injectable()
-export class CoffesService {
+export class CoffesService {  
+  constructor(private prisma: PrismaService){}  
   private cafes: CoffeesDto[] = [
     {
       id: 1,
