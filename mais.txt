@@ -1,0 +1,357 @@
+Espirito Santo:
+
+1. Modelo Prisma sugerido
+Antes de tudo, seu arquivo prisma/schema.prisma deve ter algo assim (exemplo simplificado, baseado no que pediu):
+
+prisma
+Copiar
+Editar
+model Cafe {
+  id          Int      @id @default(autoincrement())
+  nome        String
+  tipo        String
+  preco       Float
+  descricao   String
+  tags        Tag[]    @relation("CafeTags", cascadeOnDelete: true)
+  pedidos     Pedido[] // relação com pedidos
+}
+
+model Tag {
+  id      Int     @id @default(autoincrement())
+  nome    String
+  cafeId  Int
+  cafe    Cafe    @relation(fields: [cafeId], references: [id])
+}
+
+model Pedido {
+  id          Int        @id @default(autoincrement())
+  data        DateTime
+  itens       PedidoItem[]
+}
+
+model PedidoItem {
+  id       Int    @id @default(autoincrement())
+  pedidoId Int
+  cafeId   Int
+  quantidade Int
+
+  pedido   Pedido @relation(fields: [pedidoId], references: [id])
+  cafe     Cafe   @relation(fields: [cafeId], references: [id])
+}
+2. DTOs (Validação)
+Arquivo: src/coffees/dto/create-cafe.dto.ts
+
+ts
+Copiar
+Editar
+import { IsString, IsNumber, IsArray, ArrayNotEmpty } from 'class-validator';
+
+export class CreateCafeDto {
+  @IsString()
+  nome: string;
+
+  @IsString()
+  tipo: string;
+
+  @IsNumber()
+  preco: number;
+
+  @IsString()
+  descricao: string;
+
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  tags: string[];
+}
+Arquivo: src/coffees/dto/cafe-response.dto.ts
+
+ts
+Copiar
+Editar
+export class CafeResponseDto {
+  id: number;
+  nome: string;
+  tags: string[];
+}
+3. Service
+Arquivo: src/coffees/coffee.service.ts
+
+ts
+Copiar
+Editar
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { CreateCafeDto } from './dto/create-cafe.dto';
+
+@Injectable()
+export class CoffeeService {
+  constructor(private prisma: PrismaService) {}
+
+  // Criar café com tags associadas
+  async create(createCafeDto: CreateCafeDto) {
+    const { nome, tipo, preco, descricao, tags } = createCafeDto;
+
+    try {
+      const cafe = await this.prisma.cafe.create({
+        data: {
+          nome,
+          tipo,
+          preco,
+          descricao,
+          tags: {
+            create: tags.map((tag) => ({ nome: tag })),
+          },
+        },
+        include: {
+          tags: true,
+        },
+      });
+
+      return cafe;
+    } catch (error) {
+      throw new BadRequestException('Erro ao criar café');
+    }
+  }
+
+  // Listar todos cafés com suas tags (somente id, nome e tags)
+  async findAll() {
+    const cafes = await this.prisma.cafe.findMany({
+      select: {
+        id: true,
+        nome: true,
+        tags: {
+          select: {
+            nome: true,
+          },
+        },
+      },
+    });
+
+    // Ajustar o formato das tags para array de string simples
+    return cafes.map((cafe) => ({
+      id: cafe.id,
+      nome: cafe.nome,
+      tags: cafe.tags.map((tag) => tag.nome),
+    }));
+  }
+
+  // Buscar todos os pedidos que contenham um café específico pelo id do café
+  async findPedidosByCafeId(cafeId: number) {
+    // Verifica se café existe
+    const cafe = await this.prisma.cafe.findUnique({
+      where: { id: cafeId },
+    });
+    if (!cafe) throw new NotFoundException(`Café com ID ${cafeId} não encontrado`);
+
+    // Busca pedidos que possuem o café
+    const pedidos = await this.prisma.pedidoItem.findMany({
+      where: {
+        cafeId,
+      },
+      select: {
+        pedido: true,
+        quantidade: true,
+        cafe: true,
+      },
+    });
+
+    // Formata resultado
+    return pedidos.map((pedidoItem) => ({
+      pedidoId: pedidoItem.pedido.id,
+      dataPedido: pedidoItem.pedido.data,
+      quantidadeComprada: pedidoItem.quantidade,
+      cafe: {
+        id: pedidoItem.cafe.id,
+        nome: pedidoItem.cafe.nome,
+        preco: pedidoItem.cafe.preco,
+        descricao: pedidoItem.cafe.descricao,
+      },
+    }));
+  }
+
+  // Listar os cafés mais comprados (TOP 3)
+  // Filtros opcionais por tipo e/ou nome via query string
+  async findMaisVendidos(filtro?: { tipo?: string; nome?: string }) {
+    const whereCafe = {};
+
+    if (filtro?.tipo) Object.assign(whereCafe, { tipo: filtro.tipo });
+    if (filtro?.nome) Object.assign(whereCafe, { nome: { contains: filtro.nome, mode: 'insensitive' } });
+
+    // Agregação de quantidade total vendida por café
+    const cafesMaisVendidos = await this.prisma.pedidoItem.groupBy({
+      by: ['cafeId'],
+      where: {
+        cafe: whereCafe,
+      },
+      _sum: {
+        quantidade: true,
+      },
+      orderBy: {
+        _sum: {
+          quantidade: 'desc',
+        },
+      },
+      take: 3,
+    });
+
+    // Buscar dados completos dos cafés para retorno
+    const cafesIds = cafesMaisVendidos.map((c) => c.cafeId);
+    const cafes = await this.prisma.cafe.findMany({
+      where: { id: { in: cafesIds } },
+      select: { id: true, nome: true, tipo: true, preco: true, descricao: true },
+    });
+
+    // Juntar quantidade total vendida com os dados dos cafés
+    return cafesMaisVendidos.map((item) => {
+      const cafe = cafes.find((c) => c.id === item.cafeId);
+      return {
+        ...cafe,
+        totalVendido: item._sum.quantidade,
+      };
+    });
+  }
+
+  // Deletar café pelo id
+  async remove(id: number) {
+    // Verifica se existe
+    const cafeExist = await this.prisma.cafe.findUnique({ where: { id } });
+    if (!cafeExist) throw new NotFoundException(`Café com ID ${id} não encontrado`);
+
+    await this.prisma.cafe.delete({ where: { id } });
+    return { message: `Café com ID ${id} deletado com sucesso.` };
+  }
+
+  // Deletar cafés associados a uma tag e remover essa tag (delete cascade)
+  async removeByTagId(tagId: number) {
+    // Busca tag
+    const tag = await this.prisma.tag.findUnique({ where: { id: tagId } });
+    if (!tag) throw new NotFoundException(`Tag com ID ${tagId} não encontrada`);
+
+    // Pega café associado
+    const cafeId = tag.cafeId;
+
+    // Deleta tag (cascade deve apagar café relacionado se configurado)
+    await this.prisma.tag.delete({ where: { id: tagId } });
+
+    // Opcional: também deletar o café associado (se quiser)
+    await this.prisma.cafe.delete({ where: { id: cafeId } });
+
+    return { message: `Tag e café associado deletados com sucesso.` };
+  }
+}
+4. Controller
+Arquivo: src/coffees/coffee.controller.ts
+
+ts
+Copiar
+Editar
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  Body,
+  Query,
+  ParseIntPipe,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
+import { CoffeeService } from './coffee.service';
+import { CreateCafeDto } from './dto/create-cafe.dto';
+
+@Controller('coffees')
+export class CoffeeController {
+  constructor(private readonly coffeeService: CoffeeService) {}
+
+  // POST /coffee-create
+  @Post('coffee-create')
+  async create(@Body() createCafeDto: CreateCafeDto) {
+    try {
+      return await this.coffeeService.create(createCafeDto);
+    } catch (error) {
+      throw new HttpException(error.message || 'Erro ao criar café', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  // GET /coffees
+  @Get()
+  async findAll() {
+    return await this.coffeeService.findAll();
+  }
+
+  // GET /coffees/:orderId/orders  (Pega pedidos com determinado café)
+  @Get(':orderId/orders')
+  async findPedidosByCafeId(@Param('orderId', ParseIntPipe) orderId: number) {
+    try {
+      return await this.coffeeService.findPedidosByCafeId(orderId);
+    } catch (error) {
+      throw new HttpException(error.message || 'Erro ao buscar pedidos', HttpStatus.NOT_FOUND);
+    }
+  }
+
+  // GET /coffees/plus-order-coffee?tipo=x&nome=y
+  @Get('plus-order-coffee')
+  async findMaisVendidos(
+    @Query('tipo') tipo?: string,
+    @Query('nome') nome?: string,
+  ) {
+    return await this.coffeeService.findMaisVendidos({ tipo, nome });
+  }
+
+  // DELETE /coffees/:id
+  @Delete(':id')
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    try {
+      return await this.coffeeService.remove(id);
+    } catch (error) {
+      throw new HttpException(error.message || 'Erro ao deletar café', HttpStatus.NOT_FOUND);
+    }
+  }
+
+  // DELETE /coffees/:tagId/tags
+  @Delete(':tagId/tags')
+  async removeByTag(@Param('tagId', ParseIntPipe) tagId: number) {
+    try {
+      return await this.coffeeService.removeByTagId(tagId);
+    } catch (error) {
+      throw new HttpException(error.message || 'Erro ao deletar tag e cafés', HttpStatus.NOT_FOUND);
+    }
+  }
+}
+5. Registro no módulo
+Arquivo: src/coffees/coffee.module.ts
+
+ts
+Copiar
+Editar
+import { Module } from '@nestjs/common';
+import { CoffeeController } from './coffee.controller';
+import { CoffeeService } from './coffee.service';
+import { PrismaService } from 'src/prisma/prisma.service';
+
+@Module({
+  controllers: [CoffeeController],
+  providers: [CoffeeService, PrismaService],
+})
+export class CoffeeModule {}
+6. Explicação resumida
+Endpoint	Método	O que faz
+/coffee-create	POST	Cria café e associa tags
+/coffees	GET	Lista todos cafés (id, nome, tags)
+/coffees/:orderId/orders	GET	Busca pedidos que contém café por id do café
+/coffees/plus-order-coffee	GET	Lista top 3 cafés mais vendidos, com filtros
+/coffees/:id	DELETE	Deleta café por id
+/coffees/:tagId/tags	DELETE	Deleta tag e cafés associados
+
+7. Observações finais
+A relação entre café e tags é feita pelo Prisma.
+
+A relação pedido, pedidoItem e café simula as compras.
+
+Use class-validator para validar entrada.
+
+Use HttpException para erros HTTP.
+
+PrismaService deve estar configurado para conexão com seu banco (não mostrei aqui, mas é padrão NestJS+Prisma).
